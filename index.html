@@ -702,7 +702,7 @@
   <button data-tab="estoque">Estoque</button>
   <button data-tab="pesquisa">Pesquisa de Mercado</button>
   <button data-tab="vendas">Vendas</button>
-  <button data-tab="instagram">Instagram</button>
+  <button data-tab="instagram">Redes Sociais</button>
 </nav>
 
 <main>
@@ -883,8 +883,21 @@
 
   <!-- INSTAGRAM -->
   <section class="panel" id="panel-instagram">
-    <h2 class="section-title">Instagram — Análise de Concorrentes</h2>
-    <p class="section-note">Snapshot manual dos concorrentes que a @thecollectorclub.br segue no Instagram. Não é um feed ao vivo — é atualizado periodicamente (não diariamente) conforme revisitamos os perfis. Foco em contas que efetivamente vendem relógio (contas de conteúdo/mídia, tipo ClockHub, ficam de fora por ora).</p>
+    <h2 class="section-title">Redes Sociais — Análise de Concorrentes</h2>
+    <p class="section-note">Snapshot manual dos concorrentes que a @thecollectorclub.br acompanha nas redes sociais (Instagram, TikTok, Facebook e outras). Não é um feed ao vivo — é atualizado periodicamente (não diariamente) conforme revisitamos os perfis. Foco em contas que efetivamente vendem relógio (contas de conteúdo/mídia, tipo ClockHub, ficam de fora por ora).</p>
+    <div class="opp-filters" id="redesSociaisFiltros">
+      <div class="opp-filter-item">
+        <label for="filtroRedeSocial">Rede social</label>
+        <select id="filtroRedeSocial">
+          <option value="todas">Todas</option>
+          <option value="Instagram">Instagram</option>
+          <option value="TikTok">TikTok</option>
+          <option value="Facebook">Facebook</option>
+          <option value="WhatsApp">WhatsApp</option>
+          <option value="Outro">Outro</option>
+        </select>
+      </div>
+    </div>
     <div class="market-grid" id="concorrentesInstagramGrid"></div>
   </section>
 
@@ -9080,6 +9093,7 @@
   const concorrentesInstagram = [
     {
       conta: "@relogiosdoleo",
+      rede: "Instagram",
       nome: "Relógios do Léo",
       seguidores: 6809,
       especialidade: "TAG Heuer & Rolex vintage selecionados para colecionadores",
@@ -9087,10 +9101,11 @@
       comoDivulgaPreco: "Direto na foto do destaque \"Disponíveis\" (ex.: \"24.9k — No PIX ou 12x com taxas\")",
       exemploRecente: "TAG Heuer Autavia 2017 Full Set, Calibre Heuer 02, 42mm — R$24.900 (PIX ou 12x c/ taxas)",
       dataChecagem: "09/08/2026",
-      observacoes: "Estrutura de destaques fixos (Disponíveis / Vendidos / Feedbacks / ROLEX / Revisão) é um modelo bom pra copiar no nosso próprio perfil.",
+      observacoes: "Estrutura de destaques fixos (Disponíveis / Vendidos / Feedbacks / ROLEX / Revisão) é um modelo bom pra copiar no nosso próprio perfil."
     },
     {
       conta: "@vintagetimebr",
+      rede: "Instagram",
       nome: "Vintage Time BR",
       seguidores: 47200,
       especialidade: "Curadoria e venda de relógios de luxo vintage & novos (predominantemente Rolex)",
@@ -9098,10 +9113,11 @@
       comoDivulgaPreco: "Direto na foto, com ficha técnica sobreposta (referência, ano, full set, revisão) e preço no rodapé",
       exemploRecente: "Rolex Submariner Date ref. 16610, full set, revisado na Rolex em 2023, ano 1996 — R$63.900 (PIX ou 12x c/ taxas)",
       dataChecagem: "09/08/2026",
-      observacoes: "Conta grande e profissional (47,2 mil seguidores, 1.806 posts, comunidade exclusiva via link). Ótima referência de apresentação/fotografia, mesmo não sendo benchmark direto de preço pro nosso catálogo.",
+      observacoes: "Conta grande e profissional (47,2 mil seguidores, 1.806 posts, comunidade exclusiva via link). Ótima referência de apresentação/fotografia, mesmo não sendo benchmark direto de preço pro nosso catálogo."
     },
     {
       conta: "@wendwatches",
+      rede: "Instagram",
       nome: "Wend Watches",
       seguidores: 12800,
       especialidade: "Luxo original diverso — Cartier, Omega, Tudor, entre outros",
@@ -9109,10 +9125,11 @@
       comoDivulgaPreco: "Não identificado nos posts públicos vistos até agora — precisa checar destaques/stories com mais calma",
       exemploRecente: null,
       dataChecagem: "09/08/2026",
-      observacoes: "Vale revisitar os destaques \"Clientes\" e \"Comunidade\" numa próxima checagem pra confirmar se o preço aparece em algum lugar.",
+      observacoes: "Vale revisitar os destaques \"Clientes\" e \"Comunidade\" numa próxima checagem pra confirmar se o preço aparece em algum lugar."
     },
     {
       conta: "@elitetimebh",
+      rede: "Instagram",
       nome: "Elite Time BH",
       seguidores: 25800,
       especialidade: "Compra e venda de relógios de luxo, Belo Horizonte",
@@ -9120,8 +9137,8 @@
       comoDivulgaPreco: "Só por WhatsApp/DM — perfil linka direto pro contato, sem preço público nos posts vistos",
       exemploRecente: null,
       dataChecagem: "09/08/2026",
-      observacoes: "Mesma estrutura de destaques (Disponíveis / Vendidos) que a Relógios do Léo, mas sem preço público — mais difícil de usar como benchmark direto.",
-    },
+      observacoes: "Mesma estrutura de destaques (Disponíveis / Vendidos) que a Relógios do Léo, mas sem preço público — mais difícil de usar como benchmark direto."
+    }
   ];
 
   // Aprovação/reprovação manual. "Não aprovar" tem dois efeitos:
@@ -9594,11 +9611,14 @@
   function renderConcorrentesInstagram() {
     const grid = document.getElementById("concorrentesInstagramGrid");
     if (!grid) return;
-    grid.innerHTML = concorrentesInstagram.map(c => `
+    const filtroEl = document.getElementById("filtroRedeSocial");
+    const redeSelecionada = filtroEl ? filtroEl.value : "todas";
+    const lista = concorrentesInstagram.filter(c => redeSelecionada === "todas" || (c.rede || "Instagram") === redeSelecionada);
+    grid.innerHTML = lista.map(c => `
       <div class="market-card">
         <div class="mk-head">
           <h4>${c.nome} <span style="font-weight:400;">(${c.conta})</span></h4>
-          <span class="mk-source">${c.seguidores.toLocaleString("pt-BR")} seguidores · checado em ${c.dataChecagem}</span>
+          <span class="mk-source">${c.rede || "Instagram"} · ${c.seguidores.toLocaleString("pt-BR")} seguidores · checado em ${c.dataChecagem}</span>
         </div>
         <div class="mk-note">
           <strong>Especialidade:</strong> ${c.especialidade}<br>
@@ -9693,6 +9713,8 @@
   renderMercadoBR();
   renderMonitorados();
   renderConcorrentesInstagram();
+  const filtroRedeSocialEl = document.getElementById("filtroRedeSocial");
+  if (filtroRedeSocialEl) filtroRedeSocialEl.addEventListener("change", renderConcorrentesInstagram);
 
   // ---- TABS ----
   document.getElementById("tabNav").addEventListener("click", (e) => {

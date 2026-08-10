@@ -113,6 +113,12 @@
   .panel { display: none; }
   .panel.active { display: block; animation: fade 0.2s ease; }
   @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .subpanel { display: none; }
+  .subpanel.active { display: block; animation: fade 0.2s ease; }
+  nav.subtabs { display: flex; gap: 4px; margin: 4px 0 16px; border-bottom: 1px solid var(--gridline); }
+  nav.subtabs button { border: none; background: transparent; color: var(--text-secondary); padding: 8px 12px; font-size: 13px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+  nav.subtabs button.active { color: var(--text-primary); border-bottom-color: var(--series-1); }
+  nav.subtabs button:hover:not(.active) { color: var(--text-primary); }
 
   h2.section-title { font-size: 15px; font-weight: 600; margin: 0 0 10px; color: var(--text-primary); }
   p.section-note { font-size: 13px; color: var(--text-muted); margin: -6px 0 14px; }
@@ -703,6 +709,7 @@
   <button data-tab="pesquisa">Pesquisa de Mercado</button>
   <button data-tab="vendas">Vendas</button>
   <button data-tab="instagram">Redes Sociais</button>
+  <button data-tab="problemas">Relatar Problemas</button>
 </nav>
 
 <main>
@@ -883,22 +890,46 @@
 
   <!-- INSTAGRAM -->
   <section class="panel" id="panel-instagram">
-    <h2 class="section-title">Redes Sociais — Análise de Concorrentes</h2>
-    <p class="section-note">Snapshot manual dos concorrentes que a @thecollectorclub.br acompanha nas redes sociais (Instagram, TikTok, Facebook e outras). Não é um feed ao vivo — é atualizado periodicamente (não diariamente) conforme revisitamos os perfis. Foco em contas que efetivamente vendem relógio (contas de conteúdo/mídia, tipo ClockHub, ficam de fora por ora).</p>
-    <div class="opp-filters" id="redesSociaisFiltros">
-      <div class="opp-filter-item">
-        <label for="filtroRedeSocial">Rede social</label>
-        <select id="filtroRedeSocial">
-          <option value="todas">Todas</option>
-          <option value="Instagram">Instagram</option>
-          <option value="TikTok">TikTok</option>
-          <option value="Facebook">Facebook</option>
-          <option value="WhatsApp">WhatsApp</option>
-          <option value="Outro">Outro</option>
-        </select>
+    <h2 class="section-title">Redes Sociais</h2>
+    <p class="section-note">Central das nossas redes sociais — pesquisa de concorrência, gestão de anúncios e criação de artes/postagens, tudo num só lugar.</p>
+    <nav class="subtabs" id="subNavRedesSociais">
+      <button data-subtab="concorrencia" class="active">Pesquisar Concorrência</button>
+      <button data-subtab="anuncios">Gestor de Anúncios</button>
+      <button data-subtab="artes">Criador de Artes</button>
+    </nav>
+
+    <div class="subpanel active" id="subpanel-concorrencia">
+      <p class="section-note">Snapshot manual dos concorrentes que a @thecollectorclub.br acompanha nas redes sociais (Instagram, TikTok, Facebook e outras). Não é um feed ao vivo — é atualizado periodicamente (não diariamente, em geral semanalmente) conforme revisitamos os perfis, pra entender que tipo de relógio eles vendem, a que preço e como está a margem deles comparada com a nossa. Foco em contas que efetivamente vendem relógio (contas de conteúdo/mídia, tipo ClockHub, ficam de fora por ora).</p>
+      <div class="opp-filters" id="redesSociaisFiltros">
+        <div class="opp-filter-item">
+          <label for="filtroRedeSocial">Rede social</label>
+          <select id="filtroRedeSocial">
+            <option value="todas">Todas</option>
+            <option value="Instagram">Instagram</option>
+            <option value="TikTok">TikTok</option>
+            <option value="Facebook">Facebook</option>
+            <option value="WhatsApp">WhatsApp</option>
+            <option value="Outro">Outro</option>
+          </select>
+        </div>
       </div>
+      <div class="market-grid" id="concorrentesInstagramGrid"></div>
     </div>
-    <div class="market-grid" id="concorrentesInstagramGrid"></div>
+
+    <div class="subpanel" id="subpanel-anuncios">
+      <p class="section-note">Em construção — o gestor de anúncios (campanhas pagas, orçamento, performance) ainda vai ser desenhado junto com você antes de ganhar funcionalidade aqui.</p>
+    </div>
+
+    <div class="subpanel" id="subpanel-artes">
+      <p class="section-note">Em construção — o criador de artes/postagens (montagem de criativos e monitoramento do que foi publicado) ainda vai ser desenhado junto com você antes de ganhar funcionalidade aqui.</p>
+    </div>
+  </section>
+
+  <!-- PROBLEMAS -->
+  <section class="panel" id="panel-problemas">
+    <h2 class="section-title">Relatar Problemas</h2>
+    <p class="section-note">Registro automático de problemas encontrados no fluxo de trabalho (anúncios que saem do ar, erros ao publicar no site, inconsistências de dados etc.), mantido por mim conforme trabalho no dia a dia — pra você acompanhar e decidir o que precisa de atenção.</p>
+    <div class="market-grid" id="problemasGrid"></div>
   </section>
 
 </main>
@@ -9090,6 +9121,16 @@
 
   // ---- DATA (snapshot manual de análise de concorrentes no Instagram) ----
   // Atualizado manualmente ao revisitar os perfis — não é um feed ao vivo.
+  const problemasRelatados = [
+    {
+      data: "2026-08-10",
+      titulo: "Arquivo local do site ficou dessincronizado do publicado",
+      area: "Site / Publicação",
+      status: "Resolvido",
+      descricao: "O arquivo index.html salvo no ambiente de trabalho local voltou para uma versão antiga (48 itens) enquanto o site publicado no GitHub já tinha 160 itens. Causa provável: reinício do ambiente entre uma sessão e outra. Passei a sempre buscar o conteúdo direto do GitHub (raw) antes de editar, em vez de confiar no arquivo local, pra evitar publicar uma versão desatualizada por cima da atual."
+    }
+  ];
+
   const concorrentesInstagram = [
     {
       conta: "@relogiosdoleo",
@@ -9608,6 +9649,24 @@
     `).join("");
   }
 
+  function renderProblemas() {
+    const grid = document.getElementById("problemasGrid");
+    if (!grid) return;
+    if (!problemasRelatados.length) {
+      grid.innerHTML = '<p class="section-note">Nenhum problema registrado até agora.</p>';
+      return;
+    }
+    grid.innerHTML = problemasRelatados.map(p => `
+      <div class="market-card">
+        <div class="mk-head">
+          <h4>${p.titulo}</h4>
+          <span class="mk-source">${p.area} · ${p.data} · ${p.status}</span>
+        </div>
+        <div class="mk-note">${p.descricao}</div>
+      </div>
+    `).join("");
+  }
+
   function renderConcorrentesInstagram() {
     const grid = document.getElementById("concorrentesInstagramGrid");
     if (!grid) return;
@@ -9715,6 +9774,7 @@
   renderConcorrentesInstagram();
   const filtroRedeSocialEl = document.getElementById("filtroRedeSocial");
   if (filtroRedeSocialEl) filtroRedeSocialEl.addEventListener("change", renderConcorrentesInstagram);
+  renderProblemas();
 
   // ---- TABS ----
   document.getElementById("tabNav").addEventListener("click", (e) => {
@@ -9725,6 +9785,19 @@
     btn.classList.add("active");
     document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
   });
+
+  // ---- SUB-TABS (Redes Sociais) ----
+  const subNavRedesSociais = document.getElementById("subNavRedesSociais");
+  if (subNavRedesSociais) {
+    subNavRedesSociais.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-subtab]");
+      if (!btn) return;
+      subNavRedesSociais.querySelectorAll("button").forEach(b => b.classList.remove("active"));
+      document.querySelectorAll("#panel-instagram .subpanel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("subpanel-" + btn.dataset.subtab).classList.add("active");
+    });
+  }
 
   // ---- THEME ----
   function toggleTheme() {

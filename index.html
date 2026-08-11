@@ -750,7 +750,7 @@
             <th>Margem R$</th>
             <th>Margem %</th>
             <th>Data Venda</th>
-            <th>Rastreio</th>
+            <th>Status Envio</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -971,6 +971,9 @@
       dataVenda: null,
       transportadora: "DHL",
       codigoRastreio: "5795733344",
+      statusRastreio: "Shipment information received",
+      localRastreio: "NARITA - JAPAN",
+      dataAtualizacaoRastreio: "11/08/2026",
     },
   ];
 
@@ -1060,7 +1063,7 @@
           <td data-label="Margem R$">${margemR !== null ? fmtBRL(margemR) : "—"}</td>
           <td data-label="Margem %">${margemPct !== null ? margemPct.toFixed(1).replace(".", ",") + "%" : "—"}</td>
           <td data-label="Data Venda">${r.dataVenda || "—"}</td>
-          <td data-label="Rastreio">${r.codigoRastreio ? `<a href="https://www.dhl.com/global-en/home/tracking.html?tracking-id=${r.codigoRastreio}" target="_blank" rel="noopener">${r.transportadora || "Rastrear"}: ${r.codigoRastreio}</a>` : "—"}</td>
+          <td data-label="Status Envio">${r.codigoRastreio ? `<a href="https://www.dhl.com/global-en/home/tracking.html?tracking-id=${r.codigoRastreio}" target="_blank" rel="noopener" title="Ver no site da DHL">${r.statusRastreio || "Rastrear"}</a>${r.localRastreio ? ` — ${r.localRastreio}` : ""}${r.dataAtualizacaoRastreio ? ` (atualizado ${r.dataAtualizacaoRastreio})` : ""}` : "—"}</td>
         </tr>
       `;
     }).join("");

@@ -750,6 +750,7 @@
             <th>Margem R$</th>
             <th>Margem %</th>
             <th>Data Venda</th>
+            <th>Rastreio</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -968,6 +969,8 @@
       precoVenda: null,
       status: "Comprado - Aguardando Chegada",
       dataVenda: null,
+      transportadora: "DHL",
+      codigoRastreio: "5795733344",
     },
   ];
 
@@ -1057,6 +1060,7 @@
           <td data-label="Margem R$">${margemR !== null ? fmtBRL(margemR) : "—"}</td>
           <td data-label="Margem %">${margemPct !== null ? margemPct.toFixed(1).replace(".", ",") + "%" : "—"}</td>
           <td data-label="Data Venda">${r.dataVenda || "—"}</td>
+          <td data-label="Rastreio">${r.codigoRastreio ? `<a href="https://www.dhl.com/global-en/home/tracking.html?tracking-id=${r.codigoRastreio}" target="_blank" rel="noopener">${r.transportadora || "Rastrear"}: ${r.codigoRastreio}</a>` : "—"}</td>
         </tr>
       `;
     }).join("");

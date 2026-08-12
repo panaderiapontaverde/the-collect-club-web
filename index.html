@@ -751,6 +751,7 @@
             <th>Margem %</th>
             <th>Data Venda</th>
             <th>Status Envio</th>
+            <th>Preço de Mercado (BR)</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -950,6 +951,9 @@
       precoVenda: 1450.00,
       status: "Vendido",
       dataVenda: "05/08/2026",
+      precoMercadoBR: null,
+      fontePrecoMercadoBR: "Nenhuma oferta independente encontrada no OLX para a ref. SBSA111 - so apareceu o proprio anuncio do usuario (Maceio-AL, R$1.900)",
+      dataPesquisaMercadoBR: "2026-08-12",
     },
     {
       dataCompra: "15/06/2026",
@@ -960,6 +964,9 @@
       precoVenda: 3200.00,
       status: "Vendido",
       dataVenda: "03/08/2026",
+      precoMercadoBR: 4900.00,
+      fontePrecoMercadoBR: "OLX - anuncio de Felipe Carlos (Rio de Janeiro), TAG Heuer Professional 2000 WK1110-1, postado 11/08/2026",
+      dataPesquisaMercadoBR: "2026-08-12",
     },
     {
       dataCompra: "05/08/2026",
@@ -975,6 +982,9 @@
       statusRastreio: "Shipment information received",
       localRastreio: "NARITA - JAPAN",
       dataAtualizacaoRastreio: "11/08/2026",
+      precoMercadoBR: null,
+      fontePrecoMercadoBR: "Nenhum vendedor no Brasil com a ref. exata CAN1010.BA0821 (checado no OLX, Mercado Livre e Chrono24 filtrado por Brasil). Referencia internacional (Chrono24, 7 anuncios ativos, nenhum no Brasil): R$3.737 a R$8.906",
+      dataPesquisaMercadoBR: "2026-08-12",
     },
   ];
 
@@ -1066,6 +1076,7 @@
           <td data-label="Margem %">${margemPct !== null ? margemPct.toFixed(1).replace(".", ",") + "%" : "—"}</td>
           <td data-label="Data Venda">${r.dataVenda || "—"}</td>
           <td data-label="Status Envio">${r.codigoRastreio ? `<a href="https://www.dhl.com/global-en/home/tracking.html?tracking-id=${r.codigoRastreio}" target="_blank" rel="noopener" title="Ver no site da DHL">${r.statusRastreio || "Rastrear"}</a>${r.localRastreio ? ` — ${r.localRastreio}` : ""}${r.dataAtualizacaoRastreio ? ` (atualizado ${r.dataAtualizacaoRastreio})` : ""}` : "—"}</td>
+          <td data-label="Preço de Mercado (BR)">${r.precoMercadoBR != null ? `<span title="${(r.fontePrecoMercadoBR || "").replace(/"/g, "&quot;")}">${fmtBRL(r.precoMercadoBR)}</span>` : `<span class="opp-idade" title="${(r.fontePrecoMercadoBR || "Sem pesquisa de mercado ainda").replace(/"/g, "&quot;")}">não encontrado no BR</span>`}</td>
         </tr>
       `;
     }).join("");

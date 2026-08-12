@@ -825,6 +825,7 @@
         <label for="filtroOrdenar">Ordenar por</label>
         <select id="filtroOrdenar">
           <option value="recentes">Mais recentes</option>
+          <option value="antigas">Mais antigas</option>
           <option value="preco-asc">Preço final: menor primeiro</option>
           <option value="preco-desc">Preço final: maior primeiro</option>
           <option value="margem-desc">Melhor margem estimada</option>
@@ -9252,9 +9253,9 @@
     const hoje = new Date();
     const diasMs = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()) - inicio;
     const dias = Math.round(diasMs / 86400000);
-    if (dias <= 0) return "hoje";
-    if (dias === 1) return "há 1 dia";
-    return `há ${dias} dias`;
+    const dataFmt = inicio.toLocaleDateString("pt-BR");
+    const relativo = dias <= 0 ? "hoje" : (dias === 1 ? "há 1 dia" : `há ${dias} dias`);
+    return `identificado em ${dataFmt} (${relativo})`;
   }
 
   function scoreTierClass(nota) {
@@ -9316,7 +9317,11 @@
         (o.fonte || "").toLowerCase().includes(q)
       );
     }
-    if (oppFiltro.ordenar === "preco-asc") {
+    if (oppFiltro.ordenar === "recentes") {
+      lista.sort((a, b) => (b.dataIdentificacao || "").localeCompare(a.dataIdentificacao || ""));
+    } else if (oppFiltro.ordenar === "antigas") {
+      lista.sort((a, b) => (a.dataIdentificacao || "").localeCompare(b.dataIdentificacao || ""));
+    } else if (oppFiltro.ordenar === "preco-asc") {
       lista.sort((a, b) => (a.custoFinal ?? Infinity) - (b.custoFinal ?? Infinity));
     } else if (oppFiltro.ordenar === "preco-desc") {
       lista.sort((a, b) => (b.custoFinal ?? -Infinity) - (a.custoFinal ?? -Infinity));

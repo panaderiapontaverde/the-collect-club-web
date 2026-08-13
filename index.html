@@ -792,6 +792,7 @@
   <section class="panel" id="panel-pesquisa">
     <h2 class="section-title">Pesquisa de Mercado</h2>
     <p class="section-note">Oportunidades encontradas no Japão e no Brasil, prontas para decisão.</p>
+    <p class="section-note" id="pesquisaUltimaAtualizacao" style="font-weight:600;"></p>
 
     <h3 class="subsection-title">🎯 Oportunidades</h3>
     <div class="opp-summary" id="oportunidadesSummary"></div>
@@ -9874,6 +9875,7 @@
         window.relogios = relogiosData;
         window.patrimonio = patrimonioData.slice().sort((a, b) => (a._order ?? 0) - (b._order ?? 0));
         window.oportunidades = oportunidadesData;
+              atualizarUltimaAtualizacaoPesquisa(oportunidadesData);
         window.problemasRelatados = problemasData;
         window.concorrentesInstagram = concorrentesData;
         if (typeof window.renderAll === 'function') { window.renderAll(); }
@@ -9881,7 +9883,19 @@
         console.error('Erro ao carregar dados do Firestore:', e);
       }
     }
-    window.__carregarDoFirestore = carregarDoFirestore;
+    function atualizarUltimaAtualizacaoPesquisa(lista) {
+            var el = document.getElementById('pesquisaUltimaAtualizacao');
+            if (!el) return;
+            var datas = (lista || []).map(function(o){ return o && o.dataIdentificacao; }).filter(Boolean);
+            if (!datas.length) { el.textContent = ''; return; }
+            datas.sort();
+            var maisRecente = datas[datas.length - 1];
+            var partes = maisRecente.split('-');
+            var dataFormatada = maisRecente;
+            if (partes.length === 3) { dataFormatada = partes[2] + '/' + partes[1] + '/' + partes[0]; }
+            el.textContent = 'Última atualização: ' + dataFormatada;
+          }
+          window.__carregarDoFirestore = carregarDoFirestore;
     carregarDoFirestore();
   </script>
 </body>

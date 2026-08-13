@@ -941,7 +941,8 @@
 
 <script>
   // ---- DATA (snapshot manual da aba Financeiro — atualize aqui quando a planilha mudar) ----
-  const relogios = [
+  var relogios = [];
+  const relogios_dadosAntigos = [
     {
       dataCompra: "15/06/2026",
       modelo: "Seiko 5 Field SBSA111",
@@ -989,7 +990,8 @@
   ];
 
   // ---- DATA (snapshot manual da aba Patrimonio) ----
-  const patrimonio = [
+  var patrimonio = [];
+  const patrimonio_dadosAntigos = [
     { data: "15/06/2026", evento: "Aporte Inicial", caixa: 3104.32, estoque: 0, total: 3104.32, aporte: 3104.32 },
     { data: "15/06/2026", evento: "Compra dos Relógios (Seiko + TAG Heuer + Polimento)", caixa: 0, estoque: 3104.32, total: 3104.32, aporte: 0 },
     { data: "05/08/2026", evento: "Após Vendas Realizadas (Seiko + TAG Heuer)", caixa: 4650.00, estoque: 0, total: 4650.00, aporte: 0 },
@@ -1083,7 +1085,8 @@
   }
 
   // ---- DATA (snapshot manual da aba Pesquisa_Mercado > Oportunidades) ----
-  const oportunidades = [
+  var oportunidades = [];
+  const oportunidades_dadosAntigos = [
 {
       relogio: "TAG Heuer Professional 200 Meters",
       sku: "WG1113-0",
@@ -9141,7 +9144,8 @@
 
   // ---- DATA (snapshot manual de análise de concorrentes no Instagram) ----
   // Atualizado manualmente ao revisitar os perfis — não é um feed ao vivo.
-  const problemasRelatados = [
+  var problemasRelatados = [];
+  const problemasRelatados_dadosAntigos = [
     {
       data: "2026-08-10",
       titulo: "Arquivo local do site ficou dessincronizado do publicado",
@@ -9151,7 +9155,8 @@
     }
   ];
 
-  const concorrentesInstagram = [
+  var concorrentesInstagram = [];
+  const concorrentesInstagram_dadosAntigos = [
     {
       conta: "@relogiosdoleo",
       rede: "Instagram",
@@ -9783,22 +9788,25 @@
     }).join("");
   }
 
-  renderKPIs();
-  renderBars();
-  renderTable();
-  renderEstoque();
-  renderPatrimonio();
-  renderPipeline();
-  renderPerfilCompra();
-  renderMetodologia();
-  initFiltrosOportunidades();
-  renderOportunidades();
-  renderMercadoBR();
-  renderMonitorados();
-  renderConcorrentesInstagram();
+  function renderAll() {
+    renderKPIs();
+    renderBars();
+    renderTable();
+    renderEstoque();
+    renderPatrimonio();
+    renderPipeline();
+    renderPerfilCompra();
+    renderMetodologia();
+    initFiltrosOportunidades();
+    renderOportunidades();
+    renderMercadoBR();
+    renderMonitorados();
+    renderConcorrentesInstagram();
   const filtroRedeSocialEl = document.getElementById("filtroRedeSocial");
   if (filtroRedeSocialEl) filtroRedeSocialEl.addEventListener("change", renderConcorrentesInstagram);
-  renderProblemas();
+    renderProblemas();
+  }
+  window.renderAll = renderAll;
 
   // ---- TABS ----
   document.getElementById("tabNav").addEventListener("click", (e) => {
@@ -9836,5 +9844,45 @@
   }
 </script>
 
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+    import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    const firebaseConfig = {
+      apiKey: "AIzaSyBBm8m4sjRwqnQ6uCaNQjWPbTg9VocEwSg",
+      authDomain: "the-collect-club.firebaseapp.com",
+      projectId: "the-collect-club",
+      storageBucket: "the-collect-club.firebasestorage.app",
+      messagingSenderId: "765907824490",
+      appId: "1:765907824490:web:4691d9fc03a9aabd55bf13"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    async function fetchCollection(name) {
+      const snap = await getDocs(collection(db, name));
+      return snap.docs.map(d => d.data());
+    }
+    async function carregarDoFirestore() {
+      try {
+        const [relogiosData, patrimonioData, oportunidadesData, problemasData, concorrentesData] = await Promise.all([
+          fetchCollection('relogios'),
+          fetchCollection('patrimonio'),
+          fetchCollection('oportunidades'),
+          fetchCollection('problemasRelatados'),
+          fetchCollection('concorrentesInstagram')
+        ]);
+        window.relogios = relogiosData;
+        window.patrimonio = patrimonioData.slice().sort((a, b) => (a._order ?? 0) - (b._order ?? 0));
+        window.oportunidades = oportunidadesData;
+        window.problemasRelatados = problemasData;
+        window.concorrentesInstagram = concorrentesData;
+        if (typeof window.renderAll === 'function') { window.renderAll(); }
+      } catch (e) {
+        console.error('Erro ao carregar dados do Firestore:', e);
+      }
+    }
+    window.__carregarDoFirestore = carregarDoFirestore;
+    carregarDoFirestore();
+  </script>
 </body>
 </html>

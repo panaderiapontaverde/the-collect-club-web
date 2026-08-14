@@ -463,6 +463,40 @@
   .lightbox-thumbs img.is-active { border-color: #fff; opacity: 1; }
   .lightbox-count { color: rgba(255,255,255,0.75); font-size: 11.5px; }
 
+  /* Modal de motivo de rejeição ("Não aprovar") */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    display: none; align-items: center; justify-content: center;
+    z-index: 1100; padding: 20px;
+  }
+  .modal-overlay.is-open { display: flex; }
+  .modal-box {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; max-width: 420px; width: 100%;
+    max-height: 85vh; overflow-y: auto;
+  }
+  .modal-box h3 { margin: 0 0 14px; font-size: 15px; font-weight: 600; color: var(--text-primary); }
+  .motivo-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .motivo-chip {
+    font-size: 12.5px; font-weight: 600; padding: 7px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--page-plane); color: var(--text-primary);
+    cursor: pointer; transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  }
+  .motivo-chip.is-selected { background: rgba(208,59,59,0.14); border-color: rgba(208,59,59,0.4); color: #d03b3b; }
+  .modal-error {
+    font-size: 12px; color: #d03b3b; background: rgba(208,59,59,0.1);
+    border: 1px solid rgba(208,59,59,0.3); border-radius: 8px; padding: 8px 10px; margin-bottom: 12px;
+  }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .modal-actions button {
+    font-size: 12.5px; font-weight: 600; padding: 8px 14px; border-radius: 8px;
+    border: 1px solid var(--border); cursor: pointer; background: var(--page-plane); color: var(--text-primary);
+  }
+  .modal-actions button:disabled { cursor: not-allowed; opacity: 0.6; }
+  .modal-actions button#rejeicaoConfirmar:not(:disabled) {
+    background: #d03b3b; border-color: #d03b3b; color: #fff;
+  }
+
   .profile-card {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -851,6 +885,19 @@
         </div>
         <div class="lightbox-count" id="lightboxCount"></div>
         <div class="lightbox-thumbs" id="lightboxThumbs"></div>
+      </div>
+    </div>
+
+    <!-- Modal de motivo de rejeição ("Não aprovar") -->
+    <div class="modal-overlay" id="rejeicaoOverlay">
+      <div class="modal-box">
+        <h3>Por que você não aprovou este relógio?</h3>
+        <div class="motivo-options" id="motivoOptions"></div>
+        <div class="modal-error" id="rejeicaoErro" style="display:none;"></div>
+        <div class="modal-actions">
+          <button type="button" id="rejeicaoCancelar">Cancelar</button>
+          <button type="button" id="rejeicaoConfirmar" disabled>Confirmar</button>
+        </div>
       </div>
     </div>
 
@@ -9252,16 +9299,112 @@
   }
 
   // Oportunidades ativas: exclui itens descartados (fora do perfil), já vendidos/encerrados,
-  // e itens marcados como "não aprovar" localmente neste navegador —
+  // itens marcados como "não aprovar" localmente neste navegador (caminho antigo, mantido só
+  // por compatibilidade com eventuais rejeições históricas ainda não reconciliadas), e itens
+  // com rejeitadoUsuario === true (novo caminho: rejeição manual gravada direto no Firestore,
+  // com motivo selecionado — ver abrirRejeicaoModal/confirmarRejeicao) —
   // o painel deve mostrar só o que de fato é uma oportunidade de compra em aberto.
   function oportunidadesAtivas() {
     const rejeitados = getRejeitados();
     return oportunidades.filter(o =>
       o.decisao !== "nao-comprar" &&
       !/vendid[oa]/i.test(o.status || "") &&
-      !rejeitados.includes(oportunidadeId(o))
+      !rejeitados.includes(oportunidadeId(o)) &&
+      o.rejeitadoUsuario !== true
     );
   }
+
+  // ---- Rejeição manual estruturada ("Não aprovar" com motivo, gravada direto no Firestore) ----
+  const MOTIVOS_REJEICAO = [
+    { valor: "design_estetica", label: "Design / estética" },
+    { valor: "modelo_sem_interesse", label: "Modelo não me interessa" },
+    { valor: "tamanho", label: "Tamanho" },
+    { valor: "mostrador_cor", label: "Mostrador / cor" },
+    { valor: "pulseira_elos", label: "Pulseira / elos" },
+    { valor: "estado_conservacao", label: "Estado / conservação" },
+    { valor: "preco_custo", label: "Preço / custo" },
+    { valor: "caixa_acessorios", label: "Caixa / acessórios" },
+    { valor: "vendedor_confiabilidade", label: "Vendedor / confiabilidade" },
+    { valor: "outro", label: "Outro" },
+  ];
+  let __rejeicaoAlvo = null; // { idx, docId, motivos: Set }
+
+  function abrirRejeicaoModal(idx) {
+    const ativas = window.__oportunidadesAtivas || [];
+    const o = ativas[idx];
+    if (!o) return;
+    if (!o._id) {
+      alert("Não foi possível identificar este item no banco de dados (ID do Firestore ausente). Recarregue a página e tente de novo.");
+      return;
+    }
+    __rejeicaoAlvo = { idx, docId: o._id, motivos: new Set() };
+    const optsEl = document.getElementById("motivoOptions");
+    if (optsEl) {
+      optsEl.innerHTML = MOTIVOS_REJEICAO.map(m => `
+        <button type="button" class="motivo-chip" data-valor="${m.valor}" onclick="toggleMotivoRejeicao('${m.valor}')">${m.label}</button>
+      `).join("");
+    }
+    const erroEl = document.getElementById("rejeicaoErro");
+    if (erroEl) { erroEl.style.display = "none"; erroEl.textContent = ""; }
+    const confirmarBtn = document.getElementById("rejeicaoConfirmar");
+    if (confirmarBtn) { confirmarBtn.disabled = true; confirmarBtn.textContent = "Confirmar"; }
+    const cancelarBtn = document.getElementById("rejeicaoCancelar");
+    if (cancelarBtn) cancelarBtn.disabled = false;
+    const overlay = document.getElementById("rejeicaoOverlay");
+    if (overlay) overlay.classList.add("is-open");
+  }
+
+  function toggleMotivoRejeicao(valor) {
+    if (!__rejeicaoAlvo) return;
+    const set = __rejeicaoAlvo.motivos;
+    if (set.has(valor)) set.delete(valor); else set.add(valor);
+    const btn = document.querySelector(`.motivo-chip[data-valor="${valor}"]`);
+    if (btn) btn.classList.toggle("is-selected", set.has(valor));
+    const confirmarBtn = document.getElementById("rejeicaoConfirmar");
+    if (confirmarBtn) confirmarBtn.disabled = set.size === 0;
+  }
+
+  function fecharRejeicaoModal() {
+    const overlay = document.getElementById("rejeicaoOverlay");
+    if (overlay) overlay.classList.remove("is-open");
+    __rejeicaoAlvo = null;
+  }
+
+  async function confirmarRejeicao() {
+    if (!__rejeicaoAlvo || !__rejeicaoAlvo.motivos.size) return;
+    const erroEl = document.getElementById("rejeicaoErro");
+    const confirmarBtn = document.getElementById("rejeicaoConfirmar");
+    const cancelarBtn = document.getElementById("rejeicaoCancelar");
+    if (erroEl) { erroEl.style.display = "none"; erroEl.textContent = ""; }
+    if (confirmarBtn) { confirmarBtn.disabled = true; confirmarBtn.textContent = "Gravando..."; }
+    if (cancelarBtn) cancelarBtn.disabled = true;
+    const alvo = __rejeicaoAlvo;
+    try {
+      if (typeof window.__gravarRejeicaoManual !== "function") {
+        throw new Error("Recurso de gravação ainda não carregado. Recarregue a página e tente de novo.");
+      }
+      const motivos = Array.from(alvo.motivos);
+      await window.__gravarRejeicaoManual(alvo.docId, motivos);
+      // Só marca como rejeitado e some da tela DEPOIS da confirmação do Firestore.
+      const ativas = window.__oportunidadesAtivas || [];
+      const o = ativas[alvo.idx];
+      if (o) o.rejeitadoUsuario = true;
+      fecharRejeicaoModal();
+      renderOportunidades();
+    } catch (e) {
+      console.error("Erro ao gravar rejeição manual:", e);
+      if (erroEl) {
+        erroEl.textContent = (e && e.message === "LOGIN_NECESSARIO")
+          ? "Você precisa entrar com a conta Google autorizada para não aprovar um item. Redirecionando para o login..."
+          : "Não foi possível salvar a rejeição agora. O item continua na lista — tente novamente.";
+        erroEl.style.display = "block";
+      }
+      if (confirmarBtn) { confirmarBtn.disabled = false; confirmarBtn.textContent = "Confirmar"; }
+      if (cancelarBtn) cancelarBtn.disabled = false;
+    }
+  }
+  window.abrirRejeicaoModal = abrirRejeicaoModal;
+  window.toggleMotivoRejeicao = toggleMotivoRejeicao;
 
   // Dias corridos desde a identificação da oportunidade (texto curto: "hoje", "ontem", "há Nd").
   function idadeLabel(dataIso) {
@@ -9480,7 +9623,7 @@
             </details>
           ` : ""}
           <div class="decision-row">
-            <button type="button" class="btn-decision btn-reject" onclick="rejeitarOportunidade('${idAttr}')" title="Remove daqui e avisa a planilha automaticamente, sem passo extra">✕ Não aprovar</button>
+            <button type="button" class="btn-decision btn-reject" onclick="abrirRejeicaoModal(${idx})" title="Escolha o motivo e confirme para não aprovar este item">✕ Não aprovar</button>
           </div>
           <div class="foot-row">
             ${o.link ? `<a class="opp-link" href="${o.link}" target="_blank" rel="noopener">ver anúncio original ↗</a>` : "<span></span>"}
@@ -9558,6 +9701,19 @@
       if (e.key === "Escape") fecharGaleria();
       if (e.key === "ArrowLeft") lightboxNav(-1);
       if (e.key === "ArrowRight") lightboxNav(1);
+    });
+
+    // Modal de motivo de rejeição ("Não aprovar")
+    const rejeicaoOverlay = document.getElementById("rejeicaoOverlay");
+    const rejeicaoCancelar = document.getElementById("rejeicaoCancelar");
+    const rejeicaoConfirmar = document.getElementById("rejeicaoConfirmar");
+    if (rejeicaoCancelar) rejeicaoCancelar.addEventListener("click", fecharRejeicaoModal);
+    if (rejeicaoConfirmar) rejeicaoConfirmar.addEventListener("click", confirmarRejeicao);
+    if (rejeicaoOverlay) rejeicaoOverlay.addEventListener("click", (e) => { if (e.target === rejeicaoOverlay) fecharRejeicaoModal(); });
+    document.addEventListener("keydown", (e) => {
+      const overlay = document.getElementById("rejeicaoOverlay");
+      if (!overlay || !overlay.classList.contains("is-open")) return;
+      if (e.key === "Escape") fecharRejeicaoModal();
     });
   });
 
@@ -9848,7 +10004,8 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-    import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     const firebaseConfig = {
       apiKey: "AIzaSyBBm8m4sjRwqnQ6uCaNQjWPbTg9VocEwSg",
       authDomain: "the-collect-club.firebaseapp.com",
@@ -9861,8 +10018,38 @@
     const db = getFirestore(app);
     async function fetchCollection(name) {
       const snap = await getDocs(collection(db, name));
-      return snap.docs.map(d => d.data());
+      // Guarda o id real do documento (_id) só em memória, para uso interno do frontend
+      // (ex.: gravação de rejeição manual) — nunca é escrito de volta no Firestore.
+      return snap.docs.map(d => Object.assign({}, d.data(), { _id: d.id }));
     }
+
+    // ---- Autenticação (só necessária para a ação de "Não aprovar" com motivo;
+    // a leitura de todas as coleções continua pública e não depende de login) ----
+    const auth = getAuth(app);
+    const JOAO_EMAIL = "joaovitorrc10102002@gmail.com";
+    let __authReadyResolve;
+    let __authResolved = false;
+    const __authReadyPromise = new Promise((resolve) => { __authReadyResolve = resolve; });
+    onAuthStateChanged(auth, (user) => {
+      if (!__authResolved) { __authResolved = true; __authReadyResolve(user); }
+    });
+    getRedirectResult(auth).catch(() => { /* sem redirecionamento pendente, ou falhou — segue leitura normal */ });
+
+    // Grava a rejeição manual de Joao direto no documento existente em `oportunidades`,
+    // sem sobrescrever o documento inteiro (updateDoc só altera os campos passados abaixo).
+    async function gravarRejeicaoManual(docId, motivos) {
+      const user = await __authReadyPromise;
+      if (!user || user.email !== JOAO_EMAIL) {
+        signInWithRedirect(auth, new GoogleAuthProvider());
+        throw new Error("LOGIN_NECESSARIO");
+      }
+      await updateDoc(doc(db, "oportunidades", docId), {
+        rejeitadoUsuario: true,
+        motivosRejeicao: motivos,
+        dataRejeicao: serverTimestamp(),
+      });
+    }
+    window.__gravarRejeicaoManual = gravarRejeicaoManual;
     async function carregarDoFirestore() {
       try {
         const [relogiosData, patrimonioData, oportunidadesData, problemasData, concorrentesData] = await Promise.all([

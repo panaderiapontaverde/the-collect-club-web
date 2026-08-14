@@ -9310,7 +9310,8 @@
       o.decisao !== "nao-comprar" &&
       !/vendid[oa]/i.test(o.status || "") &&
       !rejeitados.includes(oportunidadeId(o)) &&
-      o.rejeitadoUsuario !== true
+      o.rejeitadoUsuario !== true &&
+      o.duplicataOculta !== true
     );
   }
 
@@ -10050,6 +10051,24 @@
       });
     }
     window.__gravarRejeicaoManual = gravarRejeicaoManual;
+
+    // Oculta uma cópia duplicada de uma oportunidade (mesmo relógio cadastrado 2x por engano
+    // na varredura de 09/08/2026). Não apaga nada — só marca duplicataOculta:true, que
+    // oportunidadesAtivas() já usa para não exibir o item na lista. Reversível a qualquer momento
+    // removendo o campo direto no Firestore.
+    async function gravarOcultacaoDuplicata(docId, idMantido) {
+      const user = await __authReadyPromise;
+      if (!user || user.email !== JOAO_EMAIL) {
+        signInWithRedirect(auth, new GoogleAuthProvider());
+        throw new Error("LOGIN_NECESSARIO");
+      }
+      await updateDoc(doc(db, "oportunidades", docId), {
+        duplicataOculta: true,
+        duplicataDeId: idMantido || null,
+        dataOcultacaoDuplicata: serverTimestamp(),
+      });
+    }
+    window.__ocultarDuplicata = gravarOcultacaoDuplicata;
     async function carregarDoFirestore() {
       try {
         const [relogiosData, patrimonioData, oportunidadesData, problemasData, concorrentesData] = await Promise.all([

@@ -827,6 +827,7 @@
     <h2 class="section-title">Pesquisa de Mercado</h2>
     <p class="section-note">Oportunidades encontradas no Japão e no Brasil, prontas para decisão.</p>
     <p class="section-note" id="pesquisaUltimaAtualizacao" style="font-weight:600;"></p>
+    <p class="section-note" id="statusBuscaDiaria" style="font-size:0.9em; color:#6b7280;"></p>
 
     <h3 class="subsection-title">🎯 Oportunidades</h3>
     <div class="opp-summary" id="oportunidadesSummary"></div>
@@ -10005,7 +10006,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-    import { getFirestore, collection, getDocs, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
     import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     const firebaseConfig = {
       apiKey: "AIzaSyBBm8m4sjRwqnQ6uCaNQjWPbTg9VocEwSg",
@@ -10069,19 +10070,60 @@
       });
     }
     window.__ocultarDuplicata = gravarOcultacaoDuplicata;
+
+    // Status da execução da busca diária automática (independente de ter achado novidade ou não —
+    // ver atualizarUltimaAtualizacaoPesquisa, que só reflete a data do item mais recente encontrado).
+    // Documento único (id fixo "diaria"), sempre sobrescrito na execução seguinte.
+    async function gravarStatusBusca(status, resumo, detalhes) {
+      const user = await __authReadyPromise;
+      if (!user || user.email !== JOAO_EMAIL) {
+        signInWithRedirect(auth, new GoogleAuthProvider());
+        throw new Error("LOGIN_NECESSARIO");
+      }
+      await setDoc(doc(db, "statusBusca", "diaria"), {
+        status: status,
+        resumo: resumo || "",
+        detalhes: detalhes || null,
+        dataExecucao: serverTimestamp(),
+      });
+    }
+    window.__gravarStatusBusca = gravarStatusBusca;
+    function atualizarStatusBuscaUI(statusDoc) {
+      const el = document.getElementById('statusBuscaDiaria');
+      if (!el) return;
+      if (!statusDoc) { el.textContent = ''; return; }
+      const rotulos = {
+        ok_sem_novidades: { texto: 'Sem novidades', cor: '#6b7280' },
+        ok_novidades: { texto: 'Novidades encontradas', cor: '#16a34a' },
+        erro: { texto: 'Erro na execução', cor: '#dc2626' },
+      };
+      const r = rotulos[statusDoc.status] || { texto: statusDoc.status || 'Desconhecido', cor: '#6b7280' };
+      let dataTexto = '';
+      const ts = statusDoc.dataExecucao;
+      if (ts && typeof ts.toDate === 'function') {
+        const d = ts.toDate();
+        dataTexto = d.toLocaleDateString('pt-BR') + ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      }
+      el.innerHTML = 'Última execução da busca automática: <strong>' + dataTexto + '</strong> — ' +
+        '<span style="color:' + r.cor + '; font-weight:600;">' + r.texto + '</span>' +
+        (statusDoc.resumo ? ' — ' + statusDoc.resumo : '');
+    }
     async function carregarDoFirestore() {
       try {
-        const [relogiosData, patrimonioData, oportunidadesData, problemasData, concorrentesData] = await Promise.all([
+        const [relogiosData, patrimonioData, oportunidadesData, problemasData, concorrentesData, statusBuscaSnap] = await Promise.all([
           fetchCollection('relogios'),
           fetchCollection('patrimonio'),
           fetchCollection('oportunidades'),
           fetchCollection('problemasRelatados'),
-          fetchCollection('concorrentesInstagram')
+          fetchCollection('concorrentesInstagram'),
+          getDoc(doc(db, 'statusBusca', 'diaria')).catch(function(){ return null; })
         ]);
         window.relogios = relogiosData;
         window.patrimonio = patrimonioData.slice().sort((a, b) => (a._order ?? 0) - (b._order ?? 0));
         window.oportunidades = oportunidadesData;
               atualizarUltimaAtualizacaoPesquisa(oportunidadesData);
+        window.statusBusca = (statusBuscaSnap && statusBuscaSnap.exists && statusBuscaSnap.exists()) ? statusBuscaSnap.data() : null;
+        atualizarStatusBuscaUI(window.statusBusca);
         window.problemasRelatados = problemasData;
         window.concorrentesInstagram = concorrentesData;
         if (typeof window.renderAll === 'function') { window.renderAll(); }

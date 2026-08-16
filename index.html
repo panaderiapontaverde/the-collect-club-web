@@ -10088,6 +10088,162 @@
       });
     }
     window.__gravarStatusBusca = gravarStatusBusca;
+        // ============================================================================
+        // VALIDACAO E SCORING DE NOVAS OPORTUNIDADES (adicionado em auditoria 15/08/2026)
+        //
+        // Regra obrigatoria daqui pra frente: NENHUM addDoc novo em "oportunidades"
+        // deve ser feito sem antes rodar window.__prepararRegistroOportunidade(candidato).
+        // Isso substitui a checagem manual "confirmar que nao existe por sku/link" do
+        // manual por uma checagem programatica, e calcula a nota com a MESMA formula
+        // (4 criterios, mesmo peso) usada para recalcular as 160 oportunidades
+        // existentes nesta auditoria - garantindo que toda nota no sistema, passada
+        // e futura, seja comparavel.
+        // ============================================================================
+
+        function _normalizarSku(sku) {
+                if (!sku) return null;
+                const s = String(sku).toLowerCase().trim();
+                if (!s || /nao informad|não informad|n\/a|^-$/.test(s)) return null;
+                return s.replace(/[^a-z0-9]/g, '');
+        }
+        function _normalizarTexto(t) {
+                return String(t || '').toLowerCase().trim().replace(/\s+/g, ' ');
+        }
+
+        function checarDuplicata(candidato, listaExistente) {
+                const lista = listaExistente || window.oportunidades || [];
+                const linkCand = _normalizarTexto(candidato.link);
+                const skuCand = _normalizarSku(candidato.sku);
+                const modeloCand = _normalizarTexto(candidato.relogio);
+                const fonteCand = _normalizarTexto(candidato.fonte);
+
+                for (const o of lista) {
+                          if (linkCand && _normalizarTexto(o.link) === linkCand) {
+                                      return { duplicata: true, tipo: 'link', idExistente: o._id, motivo: 'Mesmo link de anuncio ja registrado.' };
+                          }
+                }
+                if (skuCand) {
+                          for (const o of lista) {
+                                      if (_normalizarSku(o.sku) === skuCand && _normalizarTexto(o.fonte) === fonteCand) {
+                                                    return { duplicata: true, tipo: 'sku', idExistente: o._id, motivo: 'Mesmo SKU + mesma fonte ja registrado.' };
+                                      }
+                          }
+                }
+                const valorCand = typeof candidato.valorAnunciadoNumerico === 'number' ? candidato.valorAnunciadoNumerico : null;
+                if (valorCand != null && modeloCand && fonteCand) {
+                          for (const o of lista) {
+                                      if (_normalizarTexto(o.relogio) !== modeloCand || _normalizarTexto(o.fonte) !== fonteCand) continue;
+                                      const valorExist = typeof o.valorAnunciadoNumerico === 'number' ? o.valorAnunciadoNumerico : null;
+                                      if (valorExist == null) continue;
+                                      const diffPct = Math.abs(valorCand - valorExist) / valorExist;
+                                      if (diffPct <= 0.03) {
+                                                    return { duplicata: false, suspeita: true, tipo: 'heuristica', idExistente: o._id, motivo: 'Mesmo modelo + mesma fonte + valor muito proximo (' + (diffPct * 100).toFixed(1) + '% de diferenca) - confirmar manualmente antes de registrar.' };
+                                      }
+                          }
+                }
+                return { duplicata: false, suspeita: false, tipo: null, idExistente: null, motivo: null };
+        }
+        window.__checarDuplicata = checarDuplicata;
+
+        const MODELOS_EXCLUIDOS_RE = /connected|carrera|kirium|mclaren|red ?bull|gulf|\bfim\b|indy/i;
+        const PULSEIRA_TRANCADA_RE = /tran[çc]ad/i;
+        const NEGACAO_PROXIMA_RE = /n[ãa]o[^.]{0,20}$/i;
+        const MOSTRADOR_AMARELO_RE = /amarel/i;
+
+        function validarPerfilCompra(candidato) {
+                const bloqueios = [];
+                const avisos = [];
+                const textoCompleto = _normalizarTexto((candidato.relogio || '') + ' ' + (candidato.observacao || ''));
+
+                if (MODELOS_EXCLUIDOS_RE.test(candidato.relogio || '')) {
+                          bloqueios.push('Modelo/edicao explicitamente excluido do perfil (Connected/Carrera/Kirium/edicao especial/colaboracao).');
+                }
+                const obsAlerta = _normalizarTexto((candidato.observacao || '') + ' ' + (candidato.alerta || ''));
+                const mTr = obsAlerta.match(PULSEIRA_TRANCADA_RE);
+                if (mTr && !NEGACAO_PROXIMA_RE.test(obsAlerta.slice(Math.max(0, mTr.index - 20), mTr.index))) {
+                          bloqueios.push('Pulseira trancada - estetica excluida do perfil.');
+                }
+                if (MOSTRADOR_AMARELO_RE.test(obsAlerta)) {
+                          bloqueios.push('Mostrador amarelo - estetica excluida do perfil.');
+                }
+                if (typeof candidato.caixaMm === 'number' && candidato.caixaMm < 38) {
+                          bloqueios.push('Caixa ' + candidato.caixaMm + 'mm abaixo do minimo de 38mm.');
+                }
+                if (typeof candidato.pulsoCm === 'number' && candidato.pulsoCm < 18) {
+                          if (!candidato.alerta) {
+                                      bloqueios.push('Pulso ' + candidato.pulsoCm + 'cm abaixo do corte de 18cm, sem alerta explicito preenchido. Preencha "alerta" ou descarte.');
+                          } else {
+                                      avisos.push('Pulso ' + candidato.pulsoCm + 'cm abaixo do corte de 18cm - registrado com alerta, conforme regra do manual.');
+                          }
+                }
+                return { aprovado: bloqueios.length === 0, bloqueios, avisos };
+        }
+        window.__validarPerfilCompra = validarPerfilCompra;
+
+        function scoreOportunidade(o) {
+                function condicao() {
+                          const e = _normalizarTexto(o.estado);
+                          if (/novo|lacrad|nunca usado/.test(e)) return { criterio: 'Condicao fisica', pontos: 30, motivo: 'Novo/lacrado conforme anuncio ("' + (o.estado || '') + '")' };
+                          if (/usado a\b|excelente|super mint|quase novo/.test(e)) return { criterio: 'Condicao fisica', pontos: 26, motivo: 'Estado excelente/quase novo ("' + (o.estado || '') + '")' };
+                          if (/usado b\b/.test(e)) return { criterio: 'Condicao fisica', pontos: 20, motivo: 'Usado B - bom estado, desgaste leve ("' + (o.estado || '') + '")' };
+                          if (/usado c\b|danificad|manchad/.test(e)) return { criterio: 'Condicao fisica', pontos: 10, motivo: 'Usado C ou com dano/mancha declarado ("' + (o.estado || '') + '")' };
+                          if (/a confirmar/.test(e)) return { criterio: 'Condicao fisica', pontos: 14, motivo: 'Estado incerto, a confirmar em fotos ("' + (o.estado || '') + '")' };
+                          return { criterio: 'Condicao fisica', pontos: 17, motivo: 'Estado nao especificado com clareza no anuncio ("' + (o.estado || '') + '")' };
+                }
+                function acessorios() {
+                          let pts = 0, partes = [];
+                          if (o.caixaOriginal === 'sim') { pts += 10; partes.push('com caixa original'); } else if (o.caixaOriginal == null) { pts += 4; partes.push('caixa original nao informada'); } else { partes.push('sem caixa original'); }
+                          if (o.pulseiraOriginal === 'sim') { pts += 10; partes.push('com pulseira original'); } else if (o.pulseiraOriginal == null) { pts += 4; partes.push('pulseira original nao informada'); } else { partes.push('sem pulseira original'); }
+                          return { criterio: 'Completude de acessorios', pontos: Math.min(20, pts), motivo: partes.join(', ') };
+                }
+                function vendedor() {
+                          const f = _normalizarTexto(o.fonte); const obsx = _normalizarTexto(o.observacao);
+                          let pts = 12, motivo = 'Fonte: ' + (o.fonte || 'nao informada') + ' (padrao)';
+                          if (f.includes('2nd street')) { pts = 16; motivo = '2nd Street Japao - rede varejista estabelecida'; }
+                          if (f.includes('mercari') && /loja|shop/.test(obsx)) { pts = 15; motivo = 'Mercari Shops - loja verificada com envio internacional'; }
+                          if (f.includes('mercari') && !/loja|shop/.test(obsx)) { pts = 12; motivo = 'Mercari - vendedor individual, confiabilidade padrao'; }
+                          if (f.includes('olx')) { pts = 13; motivo = 'OLX Brasil - compra nacional direta'; }
+                          if (/alta confianca|alta confiança/.test(obsx)) { pts = Math.max(pts, 18); motivo = 'Vendedor/loja de alta confianca conforme observacao registrada'; }
+                          return { criterio: 'Confiabilidade do vendedor', pontos: Math.min(20, pts), motivo };
+                }
+                function aderencia() {
+                          let pts = 15; let partes = ['base de perfil'];
+                          if (typeof o.caixaMm === 'number') {
+                                      if (o.caixaMm >= 38 && o.caixaMm <= 44) { pts += 8; partes.push('caixa ' + o.caixaMm + 'mm dentro do perfil ideal'); }
+                                      else if (o.caixaMm >= 38) { pts += 5; partes.push('caixa ' + o.caixaMm + 'mm acima do ideal, mas dentro do minimo'); }
+                                      else { pts -= 10; partes.push('caixa ' + o.caixaMm + 'mm abaixo do minimo de 38mm'); }
+                          } else { partes.push('caixa nao informada'); }
+                          if (typeof o.pulsoCm === 'number') {
+                                      if (o.pulsoCm >= 18.5) { pts += 7; partes.push('pulso ' + o.pulsoCm + 'cm confortavel acima do corte'); }
+                                      else if (o.pulsoCm >= 18) { pts += 4; partes.push('pulso ' + o.pulsoCm + 'cm dentro do corte, no limite'); }
+                                      else { pts -= 8; partes.push('pulso ' + o.pulsoCm + 'cm abaixo do corte minimo de 18cm'); }
+                          } else { partes.push('pulso nao informado'); }
+                          return { criterio: 'Aderencia ao perfil/demanda', pontos: Math.max(0, Math.min(30, pts)), motivo: partes.join('; ') };
+    }
+          const criteriosNota = [condicao(), acessorios(), vendedor(), aderencia()];
+                const nota = criteriosNota.reduce((s, c) => s + c.pontos, 0);
+                return { nota, criteriosNota };
+        }
+        window.__scoreOportunidade = scoreOportunidade;
+
+        function prepararRegistroOportunidade(candidato, listaExistente) {
+                const dup = checarDuplicata(candidato, listaExistente);
+                const perfil = validarPerfilCompra(candidato);
+                const scoreResult = scoreOportunidade(candidato);
+                const podeRegistrar = !dup.duplicata && perfil.aprovado;
+                return {
+                          podeRegistrar,
+                          duplicata: dup,
+                          perfil,
+                          nota: scoreResult.nota,
+                          criteriosNota: scoreResult.criteriosNota,
+                          resumo: podeRegistrar
+                                      ? ('OK para registrar. Nota calculada: ' + scoreResult.nota + '/100.' + (dup.suspeita ? ' ATENCAO: ' + dup.motivo : ''))
+                                      : ('NAO registrar. ' + (dup.duplicata ? 'Duplicata (' + dup.tipo + '): ' + dup.motivo + ' ' : '') + (perfil.bloqueios.length ? 'Bloqueios de perfil: ' + perfil.bloqueios.join(' | ') : '')),
+                };
+        }
+        window.__prepararRegistroOportunidade = prepararRegistroOportunidade;
+    
     function atualizarStatusBuscaUI(statusDoc) {
       const el = document.getElementById('statusBuscaDiaria');
       if (!el) return;

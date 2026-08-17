@@ -738,6 +738,7 @@
 <nav class="tabs" id="tabNav">
   <button data-tab="visao" class="active">Visão Geral</button>
   <button data-tab="financeiro">Financeiro</button>
+  <button data-tab="fluxocaixa">Fluxo de Caixa</button>
   <button data-tab="patrimonio">Patrimônio</button>
   <button data-tab="estoque">Estoque</button>
   <button data-tab="pesquisa">Pesquisa de Mercado</button>
@@ -786,6 +787,63 @@
             <th>Data Venda</th>
             <th>Status Envio</th>
             <th>Preço de Mercado (BR)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- FLUXO DE CAIXA -->
+  <section class="panel" id="panel-fluxocaixa">
+    <h2 class="section-title">Fluxo de Caixa — Entradas e Saídas</h2>
+    <p class="section-note">Lançamentos manuais de entradas e saídas do caixa, usados para montar a DRE (Demonstração de Resultado) do período.</p>
+
+    <div class="kpi-grid" id="dreKpiGrid"></div>
+
+    <div class="card">
+      <h2 class="section-title" style="margin-bottom:4px;">Novo lançamento</h2>
+      <form id="lancamentoForm" class="opp-filters">
+        <div class="opp-filter-item">
+          <label for="lancTipo">Tipo</label>
+          <select id="lancTipo" required>
+            <option value="entrada">Entrada</option>
+            <option value="saida">Saída</option>
+          </select>
+        </div>
+        <div class="opp-filter-item">
+          <label for="lancCategoria">Categoria</label>
+          <select id="lancCategoria" required></select>
+        </div>
+        <div class="opp-filter-item">
+          <label for="lancValor">Valor (R$)</label>
+          <input type="number" id="lancValor" min="0" step="0.01" required />
+        </div>
+        <div class="opp-filter-item">
+          <label for="lancData">Data</label>
+          <input type="date" id="lancData" required />
+        </div>
+        <div class="opp-filter-item" style="flex:2; min-width:220px;">
+          <label for="lancDescricao">Descrição (opcional)</label>
+          <input type="text" id="lancDescricao" placeholder="Ex: Venda TAG Heuer Aquaracer" />
+        </div>
+        <div class="opp-filter-item" style="justify-content:flex-end;">
+          <button type="submit" id="lancamentoSubmit" class="opp-filter-clear" style="background:var(--success-text); color:#fff; border-color:transparent;">Lançar</button>
+        </div>
+      </form>
+      <p class="section-note" id="lancamentoErro" style="display:none; color:#dc2626; font-weight:600;"></p>
+    </div>
+
+    <div class="card" style="overflow-x:auto;">
+      <h2 class="section-title" style="margin-bottom:4px;">Histórico de lançamentos</h2>
+      <table id="lancamentosTable" class="stack-mobile">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Tipo</th>
+            <th>Categoria</th>
+            <th>Descrição</th>
+            <th>Valor</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -9947,6 +10005,123 @@
     }).join("");
   }
 
+  // ---- FLUXO DE CAIXA (Entradas/Saídas manuais + DRE) ----
+  const CATEGORIAS_LANCAMENTO = {
+    entrada: ["Venda", "Aporte", "Outros"],
+    saida: ["Compra de relógio", "Frete/Imposto", "Despesa operacional", "Outros"],
+  };
+
+  function popularCategoriasLancamento() {
+    const tipoEl = document.getElementById("lancTipo");
+    const catEl = document.getElementById("lancCategoria");
+    if (!tipoEl || !catEl) return;
+    const opcoes = CATEGORIAS_LANCAMENTO[tipoEl.value] || [];
+    catEl.innerHTML = opcoes.map(c => `<option value="${c}">${c}</option>`).join("");
+  }
+
+  function renderFluxoCaixa() {
+    const lista = (window.lancamentos || []).slice().sort((a, b) => (a.data || "").localeCompare(b.data || ""));
+
+    const receita = lista.filter(l => l.tipo === "entrada" && l.categoria === "Venda").reduce((s, l) => s + (l.valor || 0), 0);
+    const aportes = lista.filter(l => l.tipo === "entrada" && l.categoria === "Aporte").reduce((s, l) => s + (l.valor || 0), 0);
+    const outrasEntradas = lista.filter(l => l.tipo === "entrada" && l.categoria === "Outros").reduce((s, l) => s + (l.valor || 0), 0);
+    const custoAquisicao = lista.filter(l => l.tipo === "saida" && l.categoria === "Compra de relógio").reduce((s, l) => s + (l.valor || 0), 0);
+    const freteImposto = lista.filter(l => l.tipo === "saida" && l.categoria === "Frete/Imposto").reduce((s, l) => s + (l.valor || 0), 0);
+    const despesaOperacional = lista.filter(l => l.tipo === "saida" && l.categoria === "Despesa operacional").reduce((s, l) => s + (l.valor || 0), 0);
+    const outrasSaidas = lista.filter(l => l.tipo === "saida" && l.categoria === "Outros").reduce((s, l) => s + (l.valor || 0), 0);
+
+    const custoTotal = custoAquisicao + freteImposto;
+    const lucroBruto = receita - custoTotal;
+    const despesasTotais = despesaOperacional + outrasSaidas;
+    const resultadoPeriodo = lucroBruto - despesasTotais;
+
+    const kpis = [
+      { label: "Receita (Vendas)", value: fmtBRL(receita) },
+      { label: "Custo de Aquisição + Frete/Imposto", value: fmtBRL(custoTotal) },
+      { label: "Lucro Bruto", value: fmtBRL(lucroBruto), good: lucroBruto >= 0 },
+      { label: "Despesas Operacionais + Outras", value: fmtBRL(despesasTotais) },
+      { label: "Resultado do Período", value: fmtBRL(resultadoPeriodo), good: resultadoPeriodo >= 0 },
+      { label: "Aportes no Período", value: fmtBRL(aportes) },
+      { label: "Outras Entradas", value: fmtBRL(outrasEntradas) },
+    ];
+    const grid = document.getElementById("dreKpiGrid");
+    if (grid) {
+      grid.innerHTML = kpis.map(k => `
+        <div class="kpi">
+          <div class="label">${k.label}</div>
+          <div class="value ${k.good ? "delta good" : ""}">${k.value}</div>
+        </div>
+      `).join("");
+    }
+
+    const tbody = document.querySelector("#lancamentosTable tbody");
+    if (tbody) {
+      tbody.innerHTML = lista.slice().reverse().map(l => {
+        const dataFmt = l.data ? new Date(l.data + "T00:00:00").toLocaleDateString("pt-BR") : "—";
+        const tipoLabel = l.tipo === "entrada" ? "Entrada" : "Saída";
+        const tipoClass = l.tipo === "entrada" ? "status-vendido" : "status-transito";
+        return `
+          <tr>
+            <td data-label="Data">${dataFmt}</td>
+            <td data-label="Tipo"><span class="status-pill ${tipoClass}">${tipoLabel}</span></td>
+            <td data-label="Categoria">${l.categoria || "—"}</td>
+            <td data-label="Descrição" style="white-space:normal;">${l.descricao || "—"}</td>
+            <td data-label="Valor">${fmtBRL(l.valor || 0)}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+  }
+
+  function initLancamentoForm() {
+    const tipoEl = document.getElementById("lancTipo");
+    const form = document.getElementById("lancamentoForm");
+    if (!tipoEl || !form) return;
+    popularCategoriasLancamento();
+    tipoEl.addEventListener("change", popularCategoriasLancamento);
+    const dataEl = document.getElementById("lancData");
+    if (dataEl && !dataEl.value) dataEl.value = new Date().toISOString().slice(0, 10);
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const erroEl = document.getElementById("lancamentoErro");
+      const submitBtn = document.getElementById("lancamentoSubmit");
+      if (erroEl) { erroEl.style.display = "none"; erroEl.textContent = ""; }
+      const tipo = document.getElementById("lancTipo").value;
+      const categoria = document.getElementById("lancCategoria").value;
+      const valor = parseFloat(document.getElementById("lancValor").value);
+      const data = document.getElementById("lancData").value;
+      const descricao = document.getElementById("lancDescricao").value.trim();
+      if (!tipo || !categoria || !valor || valor <= 0 || !data) {
+        if (erroEl) { erroEl.textContent = "Preencha tipo, categoria, valor (maior que zero) e data."; erroEl.style.display = "block"; }
+        return;
+      }
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Gravando..."; }
+      try {
+        if (typeof window.__gravarLancamento !== "function") {
+          throw new Error("Recurso de gravação ainda não carregado. Recarregue a página e tente de novo.");
+        }
+        const novo = await window.__gravarLancamento(tipo, categoria, valor, data, descricao);
+        window.lancamentos = window.lancamentos || [];
+        window.lancamentos.push(novo);
+        renderFluxoCaixa();
+        form.reset();
+        popularCategoriasLancamento();
+        if (dataEl) dataEl.value = new Date().toISOString().slice(0, 10);
+      } catch (e) {
+        console.error("Erro ao gravar lançamento:", e);
+        if (erroEl) {
+          erroEl.textContent = (e && e.message === "LOGIN_NECESSARIO")
+            ? "Você precisa entrar com a conta Google autorizada para lançar. Redirecionando para o login..."
+            : "Não foi possível salvar o lançamento agora. Tente novamente.";
+          erroEl.style.display = "block";
+        }
+      } finally {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Lançar"; }
+      }
+    });
+  }
+  initLancamentoForm();
+
   function renderAll() {
     renderKPIs();
     renderBars();
@@ -9964,6 +10139,7 @@
   const filtroRedeSocialEl = document.getElementById("filtroRedeSocial");
   if (filtroRedeSocialEl) filtroRedeSocialEl.addEventListener("change", renderConcorrentesInstagram);
     renderProblemas();
+    renderFluxoCaixa();
   }
   window.renderAll = renderAll;
 
@@ -10006,7 +10182,7 @@
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, setDoc, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
     import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
     const firebaseConfig = {
       apiKey: "AIzaSyBBm8m4sjRwqnQ6uCaNQjWPbTg9VocEwSg",
@@ -10088,6 +10264,30 @@
       });
     }
     window.__gravarStatusBusca = gravarStatusBusca;
+
+    // Grava um novo lançamento manual de entrada/saída (feature "Fluxo de Caixa",
+    // adicionada em 17/08/2026). Coleção nova "lancamentos" — cada doc é um evento
+    // isolado (não sobrescreve nada). Retorna o objeto gravado (com _id) para o
+    // frontend atualizar a lista em memória sem precisar recarregar tudo do Firestore.
+    async function gravarLancamento(tipo, categoria, valor, data, descricao) {
+      const user = await __authReadyPromise;
+      if (!user || user.email !== JOAO_EMAIL) {
+        signInWithRedirect(auth, new GoogleAuthProvider());
+        throw new Error("LOGIN_NECESSARIO");
+      }
+      const registro = {
+        tipo: tipo,
+        categoria: categoria,
+        valor: valor,
+        data: data,
+        descricao: descricao || "",
+        criadoEm: serverTimestamp(),
+      };
+      const ref = await addDoc(collection(db, "lancamentos"), registro);
+      return Object.assign({}, registro, { _id: ref.id });
+    }
+    window.__gravarLancamento = gravarLancamento;
+
         // ============================================================================
         // VALIDACAO E SCORING DE NOVAS OPORTUNIDADES (adicionado em auditoria 15/08/2026)
         //
@@ -10266,17 +10466,19 @@
     }
     async function carregarDoFirestore() {
       try {
-        const [relogiosData, patrimonioData, oportunidadesData, problemasData, concorrentesData, statusBuscaSnap] = await Promise.all([
+        const [relogiosData, patrimonioData, oportunidadesData, problemasData, concorrentesData, statusBuscaSnap, lancamentosData] = await Promise.all([
           fetchCollection('relogios'),
           fetchCollection('patrimonio'),
           fetchCollection('oportunidades'),
           fetchCollection('problemasRelatados'),
           fetchCollection('concorrentesInstagram'),
-          getDoc(doc(db, 'statusBusca', 'diaria')).catch(function(){ return null; })
+          getDoc(doc(db, 'statusBusca', 'diaria')).catch(function(){ return null; }),
+          fetchCollection('lancamentos').catch(function(){ return []; })
         ]);
         window.relogios = relogiosData;
         window.patrimonio = patrimonioData.slice().sort((a, b) => (a._order ?? 0) - (b._order ?? 0));
         window.oportunidades = oportunidadesData;
+        window.lancamentos = lancamentosData;
               atualizarUltimaAtualizacaoPesquisa(oportunidadesData);
         window.statusBusca = (statusBuscaSnap && statusBuscaSnap.exists && statusBuscaSnap.exists()) ? statusBuscaSnap.data() : null;
         atualizarStatusBuscaUI(window.statusBusca);

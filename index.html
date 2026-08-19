@@ -10108,10 +10108,13 @@
         if (typeof window.__gravarLancamento !== "function") {
           throw new Error("Recurso de gravação ainda não carregado. Recarregue a página e tente de novo.");
         }
-        const novo = await window.__gravarLancamento(tipo, categoria, valor, data, descricao);
-        window.lancamentos = window.lancamentos || [];
-        window.lancamentos.push(novo);
-        renderFluxoCaixa();
+        await window.__gravarLancamento(tipo, categoria, valor, data, descricao);
+        // Aporte e Compra de relógio também mexem no Patrimônio (caixa/estoque) —
+        // por isso recarrega tudo do Firestore em vez de só atualizar local,
+        // garantindo que o card de Patrimônio já reflita o novo saldo.
+        if (typeof window.__carregarDoFirestore === "function") {
+          await window.__carregarDoFirestore();
+        }
         form.reset();
         popularCategoriasLancamento();
         if (dataEl) dataEl.value = new Date().toISOString().slice(0, 10);
@@ -10292,9 +10295,53 @@
         criadoEm: serverTimestamp(),
       };
       const ref = await addDoc(collection(db, "lancamentos"), registro);
+      // Aporte (entrada) e Compra de relógio (saída) também são eventos de Patrimônio
+      // (mexem em caixa/estoque), então geram automaticamente um novo doc em
+      // "patrimonio" na sequência, a pedido do usuário (17/08/2026). As demais
+      // categorias (Frete/Imposto, Despesa operacional, Venda, Outros) ainda não
+      // mexem no Patrimônio automaticamente.
+      await sincronizarPatrimonioComLancamento(tipo, categoria, valor, data, descricao);
       return Object.assign({}, registro, { _id: ref.id });
     }
     window.__gravarLancamento = gravarLancamento;
+
+    async function sincronizarPatrimonioComLancamento(tipo, categoria, valor, data, descricao) {
+      const ehAporte = tipo === "entrada" && categoria === "Aporte";
+      const ehCompraRelogio = tipo === "saida" && categoria === "Compra de relógio";
+      if (!ehAporte && !ehCompraRelogio) return;
+
+      const snap = await getDocs(collection(db, "patrimonio"));
+      const docs = snap.docs.map(d => d.data());
+      const ultimo = docs.reduce((max, d) => (!max || (d._order ?? -1) > (max._order ?? -1)) ? d : max, null);
+      const caixaAnterior = ultimo ? (ultimo.caixa || 0) : 0;
+      const estoqueAnterior = ultimo ? (ultimo.estoque || 0) : 0;
+      const totalAnterior = ultimo ? (ultimo.total || 0) : 0;
+      const ordemAnterior = ultimo ? (ultimo._order ?? -1) : -1;
+
+      const partes = (data || "").split("-");
+      const dataFormatada = partes.length === 3 ? (partes[2] + "/" + partes[1] + "/" + partes[0]) : data;
+
+      const novoEvento = ehAporte
+        ? {
+            data: dataFormatada,
+            evento: "Aporte" + (descricao ? " - " + descricao : "") + " (lançado via Fluxo de Caixa)",
+            caixa: caixaAnterior + valor,
+            estoque: estoqueAnterior,
+            total: totalAnterior + valor,
+            aporte: valor,
+            _order: ordemAnterior + 1,
+          }
+        : {
+            data: dataFormatada,
+            evento: "Compra de relógio" + (descricao ? " - " + descricao : "") + " (saiu do caixa, virou estoque — lançado via Fluxo de Caixa)",
+            caixa: caixaAnterior - valor,
+            estoque: estoqueAnterior + valor,
+            total: totalAnterior,
+            aporte: 0,
+            _order: ordemAnterior + 1,
+          };
+      await addDoc(collection(db, "patrimonio"), novoEvento);
+    }
 
         // ============================================================================
         // VALIDACAO E SCORING DE NOVAS OPORTUNIDADES (adicionado em auditoria 15/08/2026)
